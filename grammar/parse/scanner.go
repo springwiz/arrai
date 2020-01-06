@@ -44,56 +44,46 @@ func (r Scanner) Offset() int {
 	return r.offset
 }
 
-func (r Scanner) Slice(a, b int) *Scanner {
-	return &Scanner{
+func (r Scanner) Slice(a, b int) Scanner {
+	return Scanner{
 		src:    r.src,
 		slice:  r.slice[a:b],
 		offset: r.offset + a,
 	}
 }
 
-func (r Scanner) Skip(i int) *Scanner {
+func (r Scanner) Skip(i int) Scanner {
 	return r.Slice(i, len(r.slice))
 }
 
-func (r *Scanner) Eat(i int, eaten *Scanner) *Scanner {
-	eaten.src = r.src
-	eaten.slice = r.slice[:i]
-	eaten.offset = r.offset
-	*r = *r.Skip(i)
+func (r Scanner) Eat(i int) Scanner {
+	r.slice = r.slice[:i]
 	return r
 }
 
-func (r *Scanner) EatString(s string, eaten *Scanner) bool {
+func (r Scanner) EatString(s string) (Scanner, bool) {
 	if strings.HasPrefix(r.String(), s) {
-		r.Eat(len(s), eaten)
-		return true
+		return r.Eat(len(s)), true
 	}
-	return false
+	return Scanner{}, false
 }
 
-// EatRegexp eats the text matchin a regexp, populating match (if != nil) with
-// the whole match and captures (if != nil) with any captured groups. Returns
-// n as the number of captures set and ok iff a match was found.
-func (r *Scanner) EatRegexp(re *regexp.Regexp, match *Scanner, captures []Scanner) (n int, ok bool) {
+// EatRegexp eats the text matchin a regexp, as much of the who match and any
+// captured groups as will fit into captures. Returns n as the number of
+// captures set and ok iff a match was found.
+func (r Scanner) EatRegexp(re *regexp.Regexp, captures []Scanner) (n int, remaning Scanner, ok bool) {
 	if loc := re.FindStringSubmatchIndex(r.String()); loc != nil {
 		if loc[0] != 0 {
 			panic(`re not \A-anchored`)
 		}
-		if match != nil {
-			*match = *r.Slice(loc[0], loc[1])
-		}
-		skip := loc[1]
-		loc = loc[2:]
 		n = len(loc) / 2
 		if len(captures) > n {
 			captures = captures[:n]
 		}
 		for i := range captures {
-			captures[i] = *r.Slice(loc[2*i], loc[2*i+1])
+			captures[i] = r.Slice(loc[2*i], loc[2*i+1])
 		}
-		*r = *r.Skip(skip)
-		return n, true
+		return n, r.Skip(loc[1]), true
 	}
-	return 0, false
+	return 0, Scanner{}, false
 }

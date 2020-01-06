@@ -435,29 +435,25 @@ type diffParser struct {
 
 func (p *diffParser) Parse(input, furthest *parse.Scanner, output interface{}) (out bool) {
 	defer enterf("%s: %T %[2]v", p.rule, p.t).exitf("%v %v", &out, output)
-	panic(Unfinished)
-	// furthest := *input
-	// for i, parser := range p.parsers {
-	// 	var v interface{}
-	// 	start := *input
-	// 	if parser.Parse(&start, &v) {
-	// 		*input = start
-	// 		return p.put(output, i, v)
-	// 	}
-	// 	if furthest.Offset() < start.Offset() {
-	// 		furthest = start
-	// 	}
-	// }
-	// *input = furthest
-	// return false
+	var a interface{}
+	start := *input
+	if !p.a.Parse(input, furthest, &a) {
+		return false
+	}
+	var b interface{}
+	eaten := start.Slice(0, input.Offset()-start.Offset())
+	return (p.b.Parse(eaten, &parse.Scanner{}, &b) && eaten.String() == "")
 }
 
 func (t Diff) Parser(rule Rule, c cache) parse.Parser {
-	return &diffParser{
+	p := &diffParser{
 		rule: rule,
 		t:    t,
 		a:    t.A.Parser("", c),
 		b:    t.B.Parser("", c),
 		put:  tag(rule, diffTag),
 	}
+	c.registerRule(&p.a)
+	c.registerRule(&p.b)
+	return p
 }
