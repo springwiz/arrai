@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -83,52 +81,56 @@ func assertParseToNode(t *testing.T, expected parse.Node, rule Rule, input *pars
 	return false
 }
 
-type stackBuilder struct {
-	stack  []*parse.Node
-	prefix string
-	level  int
+type testNodes struct {
+	r      *parse.Scanner
+	assert *require.Assertions
 }
 
-var stackNamePrefixRE = regexp.MustCompile(`^([a-z\.]*)(?:` + regexp.QuoteMeta(stackDelim) + `(\d+))?\\`)
-
-func (s *stackBuilder) a(name string, extras ...interface{}) *stackBuilder {
-	var extra interface{}
-	switch len(extras) {
-	case 0:
-	case 1:
-		extra = extras[0]
-	default:
-		panic("Too many extras")
-	}
-	if prefixMatch := stackNamePrefixRE.FindStringSubmatch(name); prefixMatch != nil {
-		if prefix := prefixMatch[1]; prefix != "" {
-			s.prefix = prefix
-			s.level = 0
-			if n := prefixMatch[2]; n != "" {
-				s.level, _ = strconv.Atoi(n) // nolint:errcheck
-			}
-		} else {
-			s.level++
-			name = fmt.Sprintf("%s#%d%s", s.prefix, s.level, name)
-		}
-	}
-	s.stack = append(s.stack, parse.NewNode(name, extra))
-	return s
+func (n testNodes) slice(s string, a, b int) *parse.Scanner {
+	slice := n.r.Slice(a, b)
+	n.assert.Equal(s, slice.String())
+	return slice
 }
 
-func (s *stackBuilder) z(children ...interface{}) parse.Node {
-	if children == nil {
-		children = []interface{}{}
-	}
-	s.stack[len(s.stack)-1].Children = children
-	for i := len(s.stack) - 1; i > 0; i-- {
-		s.stack[i-1].Children = []interface{}{*s.stack[i]}
-	}
-	return *s.stack[0]
+func (n testNodes) term(children ...interface{}) parse.Node {
+	return parse.Node{Tag: "term", Extra: NonAssociative, Children: children}
 }
 
-func stack(name string, extras ...interface{}) *stackBuilder {
-	return (&stackBuilder{}).a(name, extras...)
+func (n testNodes) atom(i int, a interface{}) parse.Node {
+	return parse.Node{Tag: "atom", Extra: i, Children: []interface{}{a}}
+}
+
+func (n testNodes) ident(s *parse.Scanner) parse.Node {
+	return n.atom(0, s)
+}
+
+func (n testNodes) diff(a, b parse.Node) parse.Node {
+	return stack(`term\:`, NonAssociative).a(`\:`, NonAssociative).a(`\_`).z(
+		stack(`term#3\?`).a(`\_`).z(
+			stack(`named\_`).z(
+				stack(`?`).z(),
+				a,
+			),
+			stack(`?`).z(),
+		),
+		stack(`?`).z(),
+	)
+}
+
+func (n testNodes) quant(a, b parse.Node) parse.Node {
+}
+
+func (n testNodes) named(name *parse.Scanner, atom parse.Node) parse.Node {
+	return stack(`term\:`, NonAssociative).a(`\:`, NonAssociative).a(`\_`).z(
+		stack(`term#3\?`).a(`\_`).z(
+			stack(`named\_`).z(
+				stack(`?`).a(`_`).z(name, atom),
+				atom,
+			),
+			stack(`?`).z(),
+		),
+		stack(`?`).z(),
+	)
 }
 
 func TestParseNamedTerm(t *testing.T) {
@@ -273,4 +275,9 @@ func TestExprGrammarGrammarGrammar(t *testing.T) {
 
 	grammar2 := NewFromNode(e)
 	assertEqualObjects(t, exprGrammar, grammar2)
+}
+
+func TestDiff(t *testing.T) {
+	n := testNodes{r: parse.NewScanner(`a~b`), assert: require.New(t)}
+	// assertParseToNode(t, r.diff(r.ident(0, 1))), term, n.r)
 }

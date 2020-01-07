@@ -41,7 +41,7 @@ var grammarGrammarSrc = unfakeBackquote(`
 // Non-terminals
 grammar -> stmt+;
 stmt    -> COMMENT | prod;
-prod    -> IDENT "->" term+ ";";
+prod    -> IDENT "->" term+;
 term    -> term:op="^"
          ^ term:op="|"
          ^ term (op="~" term)?
@@ -92,7 +92,6 @@ var grammarGrammar = Grammar{
 
 	// Terminals
 	ident:   RE(`[A-Za-z_\.]\w*`),
-	ref:     Diff{A: ident, B: RE(`\.\w*`)},
 	str:     RE(unfakeBackquote(`"(?:\\.|[^\\"])*"|'(?:\\.|[^\\'])*'|‵(?:‵‵|[^‵]*)‵`)),
 	intR:    RE(`\d+`),
 	re:      RE(`/{((?:\\.|[^\\\}])*)\}`),
